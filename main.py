@@ -1,114 +1,112 @@
+import requests
 import telebot
 from telebot import types
-
 from auth import token_bot
 from mos_exchange import mos_exchange
 from binance_rates import binance_rates
 from tinkoff_exchange import tinkoff_exchange
 from Binance_P2P_rates import binance_p2p_exchange
+from cb_exchange import cb_exchange
+
 
 def start_bot(token_bot):
     bot = telebot.TeleBot(token_bot)
-    #Вызываем фун-ю из библиотеки которая принимает в себя токен телеграм бота
+    # Вызываем фун-ю из библиотеки которая принимает в себя токен телеграм бота
+
     @bot.message_handler(commands=['start'])
-    def say_hello(message):
-        bot.send_message(message.chat.id,
-                         "Привет! Я бот бот от студентов HSE, который может помочь тебе быстро отследить крус разной инсторанной валюты и криптовалюты")
-        bot.send_message(message.chat.id,
-                         "А также подскажу в каком банке сейчас выгоднее всего обменять валюту")
+    def start_command(message):
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        binance_crypto_rates = types.KeyboardButton("Курс критптовалюты Binance")
-        markup.add(binance_crypto_rates)
-        binance_p2p = types.KeyboardButton("Курс на P2P Binance")
-        markup.add(binance_p2p)
-        tinkoff = types.KeyboardButton("Курс Тиньккофф")
-        markup.add(tinkoff)
-        mos = types.KeyboardButton("Курс МосБиржы")
-        markup.add(mos)
+        markup.add(types.KeyboardButton("Курс критптовалюты Binance"),
+                   types.KeyboardButton("Курс на P2P Binance"), types.KeyboardButton("Курс МосБиржи"),types.KeyboardButton("Курс Тинькофф"), types.KeyboardButton("Курс ЦБ РФ"))
+        msg = bot.send_message(message.chat.id,
+                               "Привет! Я бот бот от студентов HSE, который может помочь тебе быстро отследить крус разной инсторанной валюты и криптовалюты",
+                               reply_markup=markup)
+        bot.register_next_step_handler(msg, user_answer)
 
-    @bot.message_handler(content_types='text')
-    def message_reply(message):
-        if message.text == 'Курс критптовалюты Binance':
-            bot.send_message(message.chat.id, "Напиши название криптовалюты в скоращенном формате, например: btc")
-            @bot.message_handler(content_types=['text'])
-            def new_value(new_value):
-                try:
-                    response = binance_rates(new_value)
-                    if (response.get("code")):
-                        if (response.get("code") == -1100):
-                            bot.send_message(message.chat.id,
-                                             "Вы ввели некорректные символы! Вы можете ипользовать только буквы английского алфавита")
-                        if (response.get("code") == -1121):
-                            bot.send_message(message.chat.id,
-                                             "Невозможно высичтать цену криптовалюты, нет привязки к USDT, либо данные были введены некорректно")
-                    else:
-                        bot.send_message(message.chat.id, f'Binance {new_value.text.upper()} \nПокупка: {response.get("price")}USDT')
+    @bot.message_handler(func=lambda message: message.text == "Назад")
+    def back(message):
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        markup.add(types.KeyboardButton("Курс критптовалюты Binance"),
+                   types.KeyboardButton("Курс на P2P Binance"), types.KeyboardButton("Курс МосБиржи"), types.KeyboardButton("Курс Тинькофф"), types.KeyboardButton("Курс ЦБ РФ"))
+        msg = bot.send_message(message.chat.id, "Выбери действие",
+                               reply_markup=markup)
+        bot.register_next_step_handler(msg, user_answer)
 
-                except Exception as ex:
-                    bot.send_message(message.chat.id,
-                                     "Произошла ошибка, поробуйте позже!")
+
+
+    def user_answer(message):
+        if message.text == "Курс критптовалюты Binance":
+            msg = bot.send_message(message.chat.id, "Введите крипту")
+            bot.register_next_step_handler(msg, get_crypto_rate)
         elif message.text == "Курс на P2P Binance":
-            bot.send_message(message.chat.id, "Напиши название криптовалюты например: usdt")
-            @bot.message_handler(content_types=['text'])
-            def new_value(new_value):
-                try:
-                    response = binance_p2p_exchange(new_value)
-                    bot.send_message(message.chat.id, response)
-                except Exception as ex:
-                    bot.send_message(message.chat.id, ('Такой криптовалюты нет на Binance'))
-        elif message.text == "Курс Тиньккофф":
-            bot.send_message(message.chat.id, "Напиши название валюты в скоращенном формате, например: usd")
-            @bot.message_handler(content_types=['text'])
-            def new_value(new_value):
-                try:
-                    response = tinkoff_exchange(new_value)
-                    bot.send_message(message.chat.id, response)
-                except Exception as ex:
-                    bot.send_message(message.chat.id, "Произошла ошибка, поробуйте позже!")
-        elif message.text == 'Курс МосБиржы':
-            bot.send_message(message.chat.id, "Напиши название валюты в скоращенном формате, например: usd")
-            @bot.message_handler(content_types=['text'])
-            def new_value(new_value):
-                try:
-                    response = mos_exchange(new_value)
-                    bot.send_message(message.chat.id, response)
-                except Exception as ex:
-                    bot.send_message(message.chat.id,
-                                     "Произошла ошибка, поробуйте позже!")
-
-        else:
-            bot.send_message(message.chat.id, "Я вас не понимаю")
-
-
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+            markup.add(types.KeyboardButton("USDT"), types.KeyboardButton("BUSD"), types.KeyboardButton("BNB"), types.KeyboardButton(
+                "ETH"), types.KeyboardButton("BTC"), types.KeyboardButton("RUB"), types.KeyboardButton("SHIB"))
+            msg = bot.send_message(
+                message.chat.id, "Введите крипту", reply_markup=markup)
+            bot.register_next_step_handler(msg, get_p2p_rate)
+        elif message.text == "Курс МосБиржи":
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+            markup.add(types.KeyboardButton("USD"), types.KeyboardButton("CNY"), types.KeyboardButton("EUR"), types.KeyboardButton(
+                "BYN"), types.KeyboardButton("TRY"))
+            msg = bot.send_message(
+                message.chat.id, "Введите крипту", reply_markup=markup)
+            bot.register_next_step_handler(msg, get_mos_ex)
+        elif message.text == "Курс Тинькофф":
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+            arr_rates = requests.get('https://acdn.tinkoff.ru/mp-resources/currencies_weights.json')
+            res = arr_rates.json()
+            for i in res:
+                markup.add(types.KeyboardButton(i))
+            msg = bot.send_message(
+                message.chat.id, "Введите валюту", reply_markup=markup)
+            bot.register_next_step_handler(msg, get_tinkoff)
+        elif message.text == "Курс ЦБ РФ":
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+            arr_rates = requests.get('https://www.cbr-xml-daily.ru/daily_json.js').json()['Valute']
+            for i in arr_rates:
+                markup.add(types.KeyboardButton(i))
+            msg = bot.send_message(
+                message.chat.id, "Введите валюту", reply_markup=markup)
+            bot.register_next_step_handler(msg, get_cb)
 
 
-    # @bot.message_handler(commands=['check_mos_rates'])
-    # def check_bank(message):
-    #     bot.send_message(message.chat.id, "Напиши название валюты в скоращенном формате, например: usd")
-    #     @bot.message_handler(content_types=['text'])
-    #     def new_value(new_value):
-    #         try:
-    #             response = mos_exchange(new_value)
-    #             bot.send_message(message.chat.id, response)
-    #         except Exception as ex:
-    #             bot.send_message(message.chat.id,
-    #                              "Произошла ошибка, поробуйте позже!")
-    # @bot.message_handler(commands=['check_tinkoff_rates'])
-    # def check_bank(message):
-    #     bot.send_message(message.chat.id, "Напиши название валюты в скоращенном формате, например: usd")
-    #     @bot.message_handler(content_types=['text'])
-    #     def new_value(new_value):
-    #         try:
-    #             response = tinkoff_exchange(new_value)
-    #             bot.send_message(message.chat.id, response)
-    #         except Exception as ex:
-    #             bot.send_message(message.chat.id, "Произошла ошибка, поробуйте позже!")
+    def get_crypto_rate(message):
+        response = binance_rates(message)
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        markup.add(types.KeyboardButton("Назад"))
+        bot.send_message(message.chat.id, response, reply_markup=markup)
+
+    def get_p2p_rate(message):
+        response = binance_p2p_exchange(message)
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        markup.add(types.KeyboardButton("Назад"))
+        bot.send_message(message.chat.id, response, reply_markup=markup)
+
+    def get_mos_ex(message):
+        response = mos_exchange(message)
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        markup.add(types.KeyboardButton("Назад"))
+        bot.send_message(message.chat.id, response, reply_markup=markup)
 
 
+    def get_tinkoff(message):
+        response = tinkoff_exchange(message)
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        markup.add(types.KeyboardButton("Назад"))
+        bot.send_message(message.chat.id, response, reply_markup=markup)
 
 
-    bot.polling() #Используется для того чтобы бот оставлася активным и реагировал на сообщения
+    def get_cb(message):
+        response = cb_exchange(message)
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        markup.add(types.KeyboardButton("Назад"))
+        bot.send_message(message.chat.id, response, reply_markup=markup)
 
+
+    bot.enable_save_next_step_handlers(delay=2)
+    bot.load_next_step_handlers()
+    bot.polling()  # Используется для того чтобы бот оставлася активным и реагировал на сообщения
 
 
 if __name__ == '__main__':
